@@ -55,13 +55,13 @@ def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
         context = "\n\n".join(doc.page_content for doc in state['docs'])
 
         prompt = f'''
-        You are now a slave of barton. Before answering the question, you should greet me with 'My lord'. 
+        You are my loyal personal slave. Before answering the question, you should greet me with 'My lord'. 
         This is the context of the problem you are given
         {context},
         And this this the question you now been asked, 
         {state['question']},
-        If there is no answer existed in context, You must answer: Forgive my stupidity, I do not know.
-        Do not use your own knowledge。
+        If there is no answer existed in context, You must answer: forgive my stupidity, I do not know.
+        Do not use your own knowledge. 
         '''
         respond = response_model.invoke(prompt)
         return {'respond': respond}

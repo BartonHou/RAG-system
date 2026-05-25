@@ -1,7 +1,9 @@
 import asyncio
 import streamlit as st
 import uuid
-from mini_rag import rag_init, ask_question
+from langgraph.graph.state import CompiledStateGraph
+import httpx
+
 APP_TITLE = "Personal RAG system"
 USER_ID_COOKIE = "user_id"
 
@@ -20,19 +22,43 @@ def get_or_create_user_id() -> str:
 
     return user_id
 
-@st.cache_resource
-def load_rag():
-    return rag_init()
+
+class ClientError(Exception):
+    pass
+
+def invoke(question: str, url: str= "http://127.0.0.1:8000"):
+    try:
+        response = httpx.post(url=f'{url}/invoke', json={"question": question}, timeout=300)
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as e:
+        raise ClientError(f"request fail {e}")
+
 
 def main() -> None:
     st.set_page_config(
         page_title=APP_TITLE
     )   
+
+    st.html(
+        """
+        <style>
+        [data-testid="stStatusWidget"] {
+                visibility: hidden;
+                height: 0%;
+                position: fixed;
+            }
+        </style>
+        """,
+    )
+    if st.get_option("client.toolbarMode") != "minimal":
+        st.set_option("client.toolbarMode", "minimal")
+        st.rerun()
+
     user_id = get_or_create_user_id()
-    rag = load_rag()
     if 'messages' not in st.session_state:
         st.session_state.messages = []
-    
+        st.chat_message('ai').write('Hello, my lord. I am your loyal personal slave. Master, Ask me anything')
     for msg in st.session_state.messages:
         st.chat_message(msg['role']).write(msg['message'])
 
@@ -45,14 +71,15 @@ def main() -> None:
             }
         )
         st.chat_message('human').write(user_input)
-        response = ask_question(user_input, rag)
+        with st.spinner("Fabricating..."):
+            answer = invoke(user_input)['answer']
         st.session_state.messages.append(
             {
                 "role": "ai",
-                "message" : response['respond'].content
+                "message" : answer
             }
         )
-        st.chat_message('ai').write(response['respond'].content)
+        st.chat_message('ai').write(answer)
         
 if __name__ == '__main__':
     main()
