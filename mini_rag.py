@@ -4,7 +4,8 @@ from langchain_core.documents import Document
 from langchain.tools import tool
 from langgraph.graph import MessagesState, StateGraph, END
 from langchain_core.messages import AIMessage
-
+from langchain_core.language_models.chat_models import BaseChatModel
+from langgraph.graph.state import CompiledStateGraph
 from langchain.chat_models import init_chat_model
 from dotenv import load_dotenv
 import os 
@@ -15,7 +16,7 @@ load_dotenv()
 class RAGState(MessagesState):
     docs: list[Document]
     question: str
-    respond: AIMessage
+    respond: AIMessage | None
 
 def read_file(filename: str) -> str:
     with open(filename, "r", encoding="utf-8") as f:
@@ -45,49 +46,43 @@ def build_retriever(chunks: list[str], model: str) -> VectorStoreRetriever:
     )
     return vectorstate.as_retriever(search_kwargs={"k": 3})
 
+def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
+    def retrieve_data(state: RAGState) -> dict[str, list[Document]]:
+        """Search data"""
+        docs = retriever.invoke(state['question'])
+        return {'docs': docs}
+    def generate_respond(state: RAGState) -> dict[str, AIMessage]:
+        context = "\n\n".join(doc.page_content for doc in state['docs'])
 
-def retrieve_data(state: RAGState) -> dict[str, list[Document]]:
-    """Search data"""
+        prompt = f'''
+        You are now a slave of barton. Before answering the question, you should greet me with 'My lord'. 
+        This is the context of the problem you are given
+        {context},
+        And this this the question you now been asked, 
+        {state['question']},
+        If there is no answer existed in context, You must answer: Forgive my stupidity, I do not know.
+        Do not use your own knowledge。
+        '''
+        respond = response_model.invoke(prompt)
+        return {'respond': respond}
 
-    docs = retriever.invoke(state['question'])
-    return {'docs': docs}
+    entirefile = read_file(data_path)
+    chunks = chunk_the_file(entirefile, 500)
+    retriever = build_retriever(chunks, "text-embedding-3-small")
+    response_model = init_chat_model("gpt-5-nano", temperature=0)
+    agent = StateGraph(RAGState)
+    agent.add_node("retrieve", retrieve_data)
+    agent.add_node("respond", generate_respond)
+    agent.set_entry_point("retrieve")
+    agent.add_edge("retrieve", "respond")
+    agent.add_edge("respond", END)
+    rag_agent = agent.compile()
+    return rag_agent
 
-def generate_respond(state: RAGState) -> dict[str, AIMessage]:
-
-    context = "\n\n".join(doc.page_content for doc in state['docs'])
-
-    prompt = f'''
-    You are now a slave of barton. Before answering the question, you should greet me with 'My lord'. 
-    This is the context of the problem you are given
-    {context},
-    And this this the question you now been asked, 
-    {state['question']},
-    If there is no answer existed in context, You must answer: Forgive my stupidity, I do not know.
-    Do not use your own knowledge。
-    '''
-    respond = response_model.invoke(prompt)
-    return {'respond': respond}
-
-PATH = './data/note.txt'
-entirefile = read_file(PATH)
-chunks = chunk_the_file(entirefile, 500)
-retriever = build_retriever(chunks, "text-embedding-3-small")
-
-response_model = init_chat_model("gpt-5-nano", temperature=0)
-
-agent = StateGraph(RAGState)
-agent.add_node("retrieve", retrieve_data)
-agent.add_node("respond", generate_respond)
-agent.set_entry_point("retrieve")
-agent.add_edge("retrieve", "respond")
-agent.add_edge("respond", END)
-
-rag_agent = agent.compile()
-
-question = "What are the core components of a minimal RAG system?"
-result = rag_agent.invoke({
-    'docs': None,
-    'question': question,
-    "respond": None
-})
-result['respond'].pretty_print()
+def ask_question(question: str, rag_agent: CompiledStateGraph) -> RAGState:
+    result = rag_agent.invoke({
+        'docs': [],
+        'question': question,
+        "respond": None
+    })
+    return result
