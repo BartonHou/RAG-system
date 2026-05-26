@@ -1,0 +1,29 @@
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.service
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile.app
+    
+    ports:
+      - "8501:8501"
+      
+    environment:
+      - API_URL=http://api:8000
+
+    depends_on:
+      - api
+  

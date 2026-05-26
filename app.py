@@ -1,11 +1,12 @@
-import asyncio
 import streamlit as st
 import uuid
 from langgraph.graph.state import CompiledStateGraph
 import httpx
-
+import os
 APP_TITLE = "Personal RAG system"
 USER_ID_COOKIE = "user_id"
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+
 
 def get_or_create_user_id() -> str:
     if USER_ID_COOKIE in st.session_state:
@@ -26,7 +27,7 @@ def get_or_create_user_id() -> str:
 class ClientError(Exception):
     pass
 
-def invoke(question: str, url: str= "http://127.0.0.1:8000"):
+def invoke(question: str, url: str= API_URL):
     try:
         response = httpx.post(url=f'{url}/invoke', json={"question": question}, timeout=300)
         response.raise_for_status()
