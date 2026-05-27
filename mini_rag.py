@@ -8,12 +8,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph.state import CompiledStateGraph
 from langchain.chat_models import init_chat_model
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from dotenv import load_dotenv
 from typing import Any
+from chroma_database import load_database
+from langchain_chroma import Chroma
+
 
 RAG_DIR = './data'
-load_dotenv()
-vector_store: InMemoryVectorStore | None = None
 retriever: VectorStoreRetriever | None= None
 response_model: BaseChatModel | None = None
 
@@ -21,55 +21,17 @@ class RAGState(MessagesState):
     docs: list[Document]
     question: str
     respond: AIMessage | None
-
-def read_file(filename: str) -> str:
-    with open(filename, "r", encoding="utf-8") as f:
-        return f.read()
-
-    
-def chunk_the_file(file: str, chunkSize: int, overlap: int = None) -> list[str]:
-    chunk = []
-    start = 0
-    if overlap is None:
-        overlap = chunkSize // 2
-
-    if chunkSize <= overlap:
-        raise ValueError("Error: Overlap should not be greater than or equal to chunk size")
-
-    while start < len(file):
-        chunk.append(file[start: start + chunkSize])
-        start+=(chunkSize - overlap)
-    return chunk
-
-def chunk_file(documents: list[Document]) -> list[Document]:
-    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=500, chunk_overlap=250
-    )
-    return text_splitter.split_documents(documents)
         
-def add_files(documents: list[Document]) -> None:
-    global vector_store
-    if vector_store is None:
-        raise RuntimeError('Vector store does not exist')
-    
-    vector_store.add_documents(documents)
+def ask_question(question: str, rag_agent: CompiledStateGraph) -> RAGState:
+    result = rag_agent.invoke({
+        'docs': [],
+        'question': question,
+        "respond": None
+    })
+    return result
 
-def build_vectorstate(chunks: list[str], model: str) -> InMemoryVectorStore:
-    embedding = OpenAIEmbeddings(model=model)
-    docs = []
-    for chunk in chunks:
-        docs.append(Document(page_content=chunk))
-    vectorstate = InMemoryVectorStore.from_documents(
-        documents=docs, embedding=embedding
-    )
-    return vectorstate
-
-def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
-    global vector_store, retriever, response_model
-    def retrieve_data(state: RAGState) -> dict[str, list[Document]]:
-        """Search data"""
-        docs = retriever.invoke(state['question'])
-        return {'docs': docs}
+def rag_init(data_path: str = './data/note.txt') -> tuple[CompiledStateGraph, Chroma]:
+    global response_model, retriever
     def generate_respond(state: RAGState) -> dict[str, AIMessage]:
         context = "\n\n".join(doc.page_content for doc in state['docs'])
 
@@ -84,11 +46,13 @@ def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
         '''
         respond = response_model.invoke(prompt)
         return {'respond': respond}
-
-    entirefile = read_file(data_path)
-    chunks = chunk_the_file(entirefile, 500)
-    vector_store = build_vectorstate(chunks, "text-embedding-3-small")
-    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+    def retrieve_data(state: RAGState) -> dict[str, list[Document]]:
+        """Search data"""
+        docs = retriever.invoke(state['question'])
+        return {'docs': docs}
+    
+    chroma = load_database()
+    retriever = chroma.as_retriever(search_kwargs={"k": 3})
     response_model = init_chat_model("gpt-5-nano", temperature=0)
     agent = StateGraph(RAGState)
     agent.add_node("retrieve", retrieve_data)
@@ -97,12 +61,4 @@ def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
     agent.add_edge("retrieve", "respond")
     agent.add_edge("respond", END)
     rag_agent = agent.compile()
-    return rag_agent
-
-def ask_question(question: str, rag_agent: CompiledStateGraph) -> RAGState:
-    result = rag_agent.invoke({
-        'docs': [],
-        'question': question,
-        "respond": None
-    })
-    return result
+    return rag_agent, chroma

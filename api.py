@@ -1,11 +1,11 @@
 from fastapi import FastAPI, APIRouter
-from mini_rag import ask_question, rag_init, chunk_file, add_files
+from mini_rag import ask_question, rag_init
+from chroma_database import chunk_file, add_files
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 from fastapi import UploadFile
 from fastapi import File
 from langchain_community.document_loaders import PDFPlumberLoader
-
 
 import os 
 
@@ -14,7 +14,7 @@ app = FastAPI()
 router = APIRouter()
 
 print("INITIATING RAG")
-rag = rag_init()
+rag, chroma = rag_init()
 
 class AskQuestion(BaseModel):
     question: str
@@ -36,8 +36,8 @@ def get_file(file: UploadFile = File(...)):
             f.write(file.file.read())
         loader = PDFPlumberLoader(path)
         documents = loader.load()
-        chunks = chunk_file(documents)
-        add_files(chunks)
+        chunks = chunk_file(documents, 500)
+        add_files(chroma, chunks)
         return {
             "status": "ok",
             "file_name": filename, 

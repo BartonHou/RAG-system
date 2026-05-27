@@ -12,6 +12,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY api.py .
 COPY mini_rag.py .
+COPY chroma_database.py .
 COPY data/ ./data/ 
 
 EXPOSE 8000

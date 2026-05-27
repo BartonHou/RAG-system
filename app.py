@@ -140,7 +140,7 @@ def main() -> None:
         if result['status'] == "ok":
             st.session_state.files.add(uploaded_file.name)
             st.success(f"Upload: {result['file_name']}")
-            st.write(result)x
+            st.write(result)
         else:
             st.error(result['message'])
 if __name__ == '__main__':
