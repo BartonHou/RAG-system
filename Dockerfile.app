@@ -8,5 +8,5 @@ RUN pip install --no-cache-dir uv
 RUN uv sync --frozen --only-group client
 COPY app.py .
 
-
+EXPOSE 8501
 CMD ["uv", "run", "streamlit", "run", "app.py"]

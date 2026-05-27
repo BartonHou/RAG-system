@@ -7,11 +7,15 @@ from langchain_core.messages import AIMessage
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph.state import CompiledStateGraph
 from langchain.chat_models import init_chat_model
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
-import os 
+from typing import Any
 
+RAG_DIR = './data'
 load_dotenv()
-
+vector_store: InMemoryVectorStore | None = None
+retriever: VectorStoreRetriever | None= None
+response_model: BaseChatModel | None = None
 
 class RAGState(MessagesState):
     docs: list[Document]
@@ -22,6 +26,7 @@ def read_file(filename: str) -> str:
     with open(filename, "r", encoding="utf-8") as f:
         return f.read()
 
+    
 def chunk_the_file(file: str, chunkSize: int, overlap: int = None) -> list[str]:
     chunk = []
     start = 0
@@ -36,7 +41,20 @@ def chunk_the_file(file: str, chunkSize: int, overlap: int = None) -> list[str]:
         start+=(chunkSize - overlap)
     return chunk
 
-def build_retriever(chunks: list[str], model: str) -> VectorStoreRetriever:
+def chunk_file(documents: list[Document]) -> list[Document]:
+    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        chunk_size=500, chunk_overlap=250
+    )
+    return text_splitter.split_documents(documents)
+        
+def add_files(documents: list[Document]) -> None:
+    global vector_store
+    if vector_store is None:
+        raise RuntimeError('Vector store does not exist')
+    
+    vector_store.add_documents(documents)
+
+def build_vectorstate(chunks: list[str], model: str) -> InMemoryVectorStore:
     embedding = OpenAIEmbeddings(model=model)
     docs = []
     for chunk in chunks:
@@ -44,9 +62,10 @@ def build_retriever(chunks: list[str], model: str) -> VectorStoreRetriever:
     vectorstate = InMemoryVectorStore.from_documents(
         documents=docs, embedding=embedding
     )
-    return vectorstate.as_retriever(search_kwargs={"k": 3})
+    return vectorstate
 
 def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
+    global vector_store, retriever, response_model
     def retrieve_data(state: RAGState) -> dict[str, list[Document]]:
         """Search data"""
         docs = retriever.invoke(state['question'])
@@ -68,7 +87,8 @@ def rag_init(data_path: str = './data/note.txt') -> CompiledStateGraph:
 
     entirefile = read_file(data_path)
     chunks = chunk_the_file(entirefile, 500)
-    retriever = build_retriever(chunks, "text-embedding-3-small")
+    vector_store = build_vectorstate(chunks, "text-embedding-3-small")
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     response_model = init_chat_model("gpt-5-nano", temperature=0)
     agent = StateGraph(RAGState)
     agent.add_node("retrieve", retrieve_data)
