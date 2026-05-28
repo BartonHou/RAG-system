@@ -4,7 +4,7 @@ from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-
+import uuid
 load_dotenv()
 
 def load_database(db_name: str = "./chroma_db") -> Chroma:
@@ -26,5 +26,16 @@ def chunk_file(documents: list[Document], chunkSize: int, overlap: int = None):
     )
     return text_splitter.split_documents(documents)
 
-def add_files(chroma: Chroma, documents: list[Document]) -> None:
-    chroma.add_documents(documents)
+def add_files(filename: str, path: str, chroma: Chroma, documents: list[Document]) -> str:
+    doc_id = str(uuid.uuid4())
+    chunk_ids = []
+    for chunk_id, document in enumerate(documents):
+        document.metadata.update({
+            "file_id": doc_id,
+            "file_name": filename,
+            "chunk": chunk_id,
+            "path": path
+        })
+        chunk_ids.append(f"{doc_id}: {chunk_id}")
+    chroma.add_documents(documents, ids=chunk_ids)
+    return doc_id

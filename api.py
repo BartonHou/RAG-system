@@ -37,13 +37,14 @@ def get_file(file: UploadFile = File(...)):
         loader = PDFPlumberLoader(path)
         documents = loader.load()
         chunks = chunk_file(documents, 500)
-        add_files(chroma, chunks)
+        file_id = add_files(filename, path, chroma, chunks)
         return {
             "status": "ok",
+            "file_id": file_id,
             "file_name": filename, 
             "saved_path": path,
-            "pages": len(documents),
-            "chunks": len(chunks)
+            "n_doc ": len(documents),
+            "n_chunk": len(chunks)
         }
     except Exception as e:
         print(f"Error occur while loading pdf file {e}")
@@ -51,6 +52,9 @@ def get_file(file: UploadFile = File(...)):
             "status": "error",
             "message": str(e)
         }
+
+# @app.post("/query")
+# def query_by_id(id: str):
 
 
 @app.get("/health")

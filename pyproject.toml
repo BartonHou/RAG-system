@@ -9,10 +9,8 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "python-multipart",
-
     "streamlit",
     "httpx",
-
     "langchain",
     "langchain-community",
     "langchain-openai",
@@ -20,7 +18,6 @@ dependencies = [
     "langchain-text-splitters",
     "langgraph",
     "chromadb",
-
     "pdfplumber",
     "python-dotenv",
     "tiktoken",

@@ -15,6 +15,7 @@ services:
       start_period: 30s
     volumes:
       - ./data:/app/data
+      - ./chroma_db:/app/chroma_db
   app:
     build: 
       context: .
