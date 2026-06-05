@@ -5,3 +5,6 @@ __pycache__
 .env
 .cache
 .streamlit
+
+data/*
+chroma_db/*

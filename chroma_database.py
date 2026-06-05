@@ -28,7 +28,7 @@ def chunk_file(documents: list[Document], chunkSize: int, overlap: int = None):
 
 def add_files(filename: str, path: str, chroma: Chroma, documents: list[Document]) -> str:
     doc_id = str(uuid.uuid4())
-    chunk_ids = []
+    ids = []
     for chunk_id, document in enumerate(documents):
         document.metadata.update({
             "file_id": doc_id,
@@ -36,6 +36,6 @@ def add_files(filename: str, path: str, chroma: Chroma, documents: list[Document
             "chunk": chunk_id,
             "path": path
         })
-        chunk_ids.append(f"{doc_id}: {chunk_id}")
-    chroma.add_documents(documents, ids=chunk_ids)
+        ids.append(f"{doc_id}:{chunk_id}")
+    chroma.add_documents(documents, ids=ids)
     return doc_id

@@ -110,11 +110,10 @@ def main() -> None:
         st.chat_message(msg['role']).write(msg['message'])
 
     
-    left, right = st.bottom.columns([3, 1], vertical_alignment="bottom")
 
-    user_input = left.chat_input()
+    user_input = st.bottom.chat_input()
 
-    uploaded_file = right.file_uploader("Choose a file", type=['pdf'])
+    uploaded_file = st.bottom.file_uploader("Choose a file", type=['pdf'])
     
     if user_input:
         st.session_state.messages.append(
