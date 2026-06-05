@@ -140,6 +140,9 @@ def main() -> None:
             st.session_state.files.add(uploaded_file.name)
             st.success(f"Upload: {result['file_name']}")
             st.write(result)
+        elif result["status"] == "exists":
+            st.warning(f"File already exists: {result['file_name']}")
+            st.write(result)
         else:
             st.error(result['message'])
 if __name__ == '__main__':

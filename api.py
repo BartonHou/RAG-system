@@ -1,6 +1,11 @@
 from fastapi import FastAPI, APIRouter
 from mini_rag import ask_question, rag_init
-from chroma_database import chunk_file, add_files
+from chroma_database import (
+    chunk_file, 
+    add_files, 
+    compute_file_hash,
+    find_file_by_hash
+)
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 from fastapi import UploadFile
@@ -37,17 +42,34 @@ def get_file(file: UploadFile = File(...)):
         filename = file.filename
         path = os.path.join(RAG_DIR, filename)
         os.makedirs(RAG_DIR, exist_ok=True)
+
+        content = file.file.read()
+        file_hash = compute_file_hash(content)
+
+        existing_file = find_file_by_hash(chroma, file_hash)
+        if existing_file is not None:
+            return {
+                "status": "exists",
+                "message": "File already exists in vector database",
+                "file_id": existing_file["file_id"],
+                "file_name": existing_file["file_name"],
+                "path": existing_file["path"],
+                "file_hash": existing_file["file_hash"],
+                "n_chunk": existing_file["n_existing_chunks"],
+            }
+        
         with open(path, "wb") as f:
-            f.write(file.file.read())
+            f.write(content)
         loader = PDFPlumberLoader(path)
         documents = loader.load()
         chunks = chunk_file(documents, 500)
-        file_id = add_files(filename, path, chroma, chunks)
+        file_id = add_files(filename, path, chroma, chunks, file_hash)
         return {
             "status": "ok",
             "file_id": file_id,
             "file_name": filename, 
-            "saved_path": path,
+            "file_hash": file_hash,
+            "path": path,
             "n_doc": len(documents),
             "n_chunk": len(chunks)
         }
@@ -68,11 +90,6 @@ def query_by_file_id(file_id: str):
 @app.get("/id/{id}")
 def query_by_chunk_id(id: str):
     return chroma.get(ids=[id]) 
-
-
-# @app.get("/chunks")
-# def get_all_chunks():
-#     return chroma.get(include=["documents"])
 
 @app.get("/chunks")
 def get_all_chunks():
